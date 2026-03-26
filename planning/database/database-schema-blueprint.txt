@@ -1,0 +1,1519 @@
+================================================================================
+DATABASE BLUEPRINT – EMPLOYEE MANAGEMENT SYSTEM (PRODUCTION READY)
+================================================================================
+
+Developer: Chandrashekhar Bansal
+Role: Lead Application Architect & Database Designer
+Contact: chandrashekhar.bansal@example.com
+LinkedIn: https://linkedin.com/in/chandrashekhar-bansal
+
+File Version: 1.0.0
+Date: 2026-03-26
+
+--------------------------------------------------------------------------------
+VERSION HISTORY
+--------------------------------------------------------------------------------
+1.0.0 (2026-03-26)
+  - Initial production‑ready release based on requirements v60.0.1.
+  - Added missing core HR fields: employee personal details, status, probation dates.
+  - Added recruitment module: job requisitions, candidates, interviews, offers.
+  - Added onboarding module: checklists, tasks.
+  - Added leave balance tracking, enhanced leave requests.
+  - Added payroll runs, salary structure per employee, statutory contributions.
+  - Added performance management: goals, appraisal cycles, multi‑rater feedback.
+  - Added separation workflow: resignations, clearances, full & final settlement.
+  - Added assets maintenance, inventory tracking, vendor enhancements.
+  - Added notification system: emails, SMS, in‑app notifications.
+  - Added system configuration: lookups, workflows, settings.
+  - Added comprehensive indexes, soft deletes, JSONB metadata columns.
+  - Re‑ordered migrations to ensure foreign key integrity.
+  - All tables now include `created_at`, `updated_at`, `deleted_at` (soft delete).
+
+--------------------------------------------------------------------------------
+MIGRATION ORDER (85 TABLES)
+--------------------------------------------------------------------------------
+001_companies
+002_locations
+003_cost_centers
+004_departments
+005_designations
+006_roles
+007_permissions
+008_role_permissions
+009_users
+010_branches
+011_office_rooms
+012_shift_configs
+013_holidays
+014_notice_board
+015_transport_routes
+016_transport_vehicles
+017_employees
+018_employee_personal_details
+019_employee_status_history
+020_employee_contracts
+021_employee_dependents
+022_bank_details
+023_emergency_contacts
+024_education_history
+025_work_experience
+026_emp_documents
+027_job_requisitions
+028_candidates
+029_interviews
+030_offers
+031_onboarding_checklists
+032_onboarding_tasks
+033_leave_types
+034_leave_balances
+035_leave_requests
+036_attendance
+037_overtime_logs
+038_attendance_regularizations
+039_holiday_calendar_regional
+040_shift_rosters
+041_salary_grades
+042_salary_structures
+043_payroll_runs
+044_salary_slips
+045_salary_components
+046_statutory_contributions
+047_tax_records
+048_tax_declarations
+049_bonus_incentives
+050_loans
+051_reimbursements
+052_expense_claims
+053_training_courses
+054_course_modules
+055_trainers
+056_course_enrollments
+057_assignments
+058_submissions
+059_exam_schedules
+060_exam_results
+061_skills
+062_employee_skills
+063_certifications
+064_performance_kpis
+065_performance_goals
+066_appraisal_cycles
+067_appraisals
+068_multi_rater_feedback
+069_performance_improvement_plans
+070_resignations
+071_separation_clearances
+072_full_final_settlements
+073_assets
+074_asset_assignments
+075_asset_maintenance
+076_office_inventory
+077_inventory_consumption
+078_vendor_details
+079_procurement
+080_helpdesk_tickets
+081_notification_templates
+082_notification_logs
+083_in_app_notifications
+084_lookup_values
+085_workflow_definitions
+086_application_settings
+087_audit_logs
+088_api_logs
+089_refresh_tokens
+
+--------------------------------------------------------------------------------
+INDEXES
+--------------------------------------------------------------------------------
+1. Index on all foreign keys (e.g., idx_employees_dept_id, idx_employees_manager_id)
+2. Index on date columns for range queries (attendance.log_date, salary_slips.month_year)
+3. Index on status columns (leave_requests.status, candidates.status)
+4. Composite unique indexes where specified in constraints
+5. Full‑text search indexes on candidate names, document titles (if using PostgreSQL)
+6. GIN indexes on JSONB columns (metadata, old_data, new_data) for advanced queries
+7. Index on email, emp_code, user_id, etc. for quick lookups
+
+--------------------------------------------------------------------------------
+TABLE SCHEMAS (VERSION 1.0.0)
+--------------------------------------------------------------------------------
+
+-- ============================================================================
+-- 1. COMPANIES (Legal entities)
+-- ============================================================================
+Table: companies
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(200)   | NOT NULL, UNIQUE                      |             | idx_companies_name|                                  |
+| code            | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_companies_code|                                  |
+| pan             | VARCHAR(20)    |                                       |             |                   |                                  |
+| gst             | VARCHAR(20)    |                                       |             |                   |                                  |
+| pf_reg_no       | VARCHAR(50)    |                                       |             |                   |                                  |
+| esi_reg_no      | VARCHAR(50)    |                                       |             |                   |                                  |
+| address         | TEXT           |                                       |             |                   |                                  |
+| logo_url        | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 2. LOCATIONS (City/State/Country hierarchy)
+-- ============================================================================
+Table: locations
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL                              |             | idx_locations_name|                                  |
+| parent_id       | INT            |                                       | locations.id| idx_locations_parent| For hierarchy                     |
+| type            | VARCHAR(20)    | NOT NULL                              |             |                   | Country, State, City, Area      |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 3. COST_CENTERS
+-- ============================================================================
+Table: cost_centers
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| code            | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_cost_centers_code|                               |
+| name            | VARCHAR(200)   | NOT NULL                              |             | idx_cost_centers_name|                               |
+| company_id      | INT            | NOT NULL                              | companies.id| idx_cost_centers_company|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 4. DEPARTMENTS
+-- ============================================================================
+Table: departments
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_departments_name|                               |
+| code            | VARCHAR(20)    | NOT NULL, UNIQUE                      |             | idx_departments_code|                               |
+| parent_dept_id  | INT            |                                       | departments.id| idx_departments_parent|                               |
+| head_of_dept_id | INT            |                                       | employees.id| idx_departments_head| See employees table later       |
+| cost_center_id  | INT            |                                       | cost_centers.id| idx_departments_cost|                               |
+| company_id      | INT            | NOT NULL                              | companies.id| idx_departments_company|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 5. DESIGNATIONS
+-- ============================================================================
+Table: designations
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| title           | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_designations_title|                               |
+| job_level       | INT            | NOT NULL                              |             |                   | 1=Entry, 2=Junior, etc.         |
+| is_managerial   | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 6. ROLES (RBAC)
+-- ============================================================================
+Table: roles
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_roles_name    |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| is_system_role  | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 7. PERMISSIONS
+-- ============================================================================
+Table: permissions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_permissions_name|                               |
+| module_group    | VARCHAR(50)    |                                       |             |                   | e.g., Leave, Payroll             |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 8. ROLE_PERMISSIONS
+-- ============================================================================
+Table: role_permissions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| role_id         | INT            | NOT NULL                              | roles.id    | pk_role_permissions| Composite PK                     |
+| permission_id   | INT            | NOT NULL                              | permissions.id| pk_role_permissions|                                  |
+| granted_by      | INT            |                                       | users.id    |                   | User who granted                 |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| PRIMARY KEY     | (role_id, permission_id)              |             |                   |                                  |
+
+-- ============================================================================
+-- 9. USERS (Authentication)
+-- ============================================================================
+Table: users
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| email           | VARCHAR(150)   | NOT NULL, UNIQUE                      |             | idx_users_email   |                                  |
+| password        | VARCHAR(255)   | NOT NULL                              |             |                   |                                  |
+| role_id         | INT            | NOT NULL                              | roles.id    | idx_users_role    |                                  |
+| is_active       | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| failed_attempts | INT            | DEFAULT 0                             |             |                   |                                  |
+| last_login_at   | TIMESTAMP      |                                       |             |                   |                                  |
+| mfa_enabled     | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| mfa_secret      | VARCHAR(100)   |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 10. BRANCHES (Physical offices)
+-- ============================================================================
+Table: branches
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_branches_name |                                  |
+| code            | VARCHAR(20)    | NOT NULL, UNIQUE                      |             | idx_branches_code |                                  |
+| location_id     | INT            | NOT NULL                              | locations.id| idx_branches_location|                               |
+| company_id      | INT            | NOT NULL                              | companies.id| idx_branches_company|                               |
+| address         | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 11. OFFICE_ROOMS
+-- ============================================================================
+Table: office_rooms
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| room_no         | VARCHAR(50)    | NOT NULL                              |             | idx_office_rooms_no| Unique per branch                |
+| branch_id       | INT            | NOT NULL                              | branches.id | idx_office_rooms_branch|                               |
+| capacity        | INT            |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+| UNIQUE          | (room_no, branch_id)                  |             |                   |                                  |
+
+-- ============================================================================
+-- 12. SHIFT_CONFIGS
+-- ============================================================================
+Table: shift_configs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| shift_name      | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_shift_configs_name|                               |
+| start_time      | TIME           | NOT NULL                              |             |                   |                                  |
+| end_time        | TIME           | NOT NULL                              |             |                   |                                  |
+| grace_minutes   | INT            | DEFAULT 0                             |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 13. HOLIDAYS (Company‑wide)
+-- ============================================================================
+Table: holidays
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| holiday_name    | VARCHAR(100)   | NOT NULL                              |             | idx_holidays_name |                                  |
+| holiday_date    | DATE           | NOT NULL                              |             | idx_holidays_date |                                  |
+| company_id      | INT            | NOT NULL                              | companies.id| idx_holidays_company|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (holiday_date, company_id)            |             |                   |                                  |
+
+-- ============================================================================
+-- 14. NOTICE_BOARD
+-- ============================================================================
+Table: notice_board
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| title           | VARCHAR(200)   | NOT NULL                              |             | idx_notice_title  |                                  |
+| content         | TEXT           | NOT NULL                              |             |                   |                                  |
+| target_dept_id  | INT            |                                       | departments.id| idx_notice_dept   | Null = all depts                 |
+| expires_at      | TIMESTAMP      |                                       |             |                   |                                  |
+| created_by      | INT            | NOT NULL                              | users.id    | idx_notice_creator|                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 15. TRANSPORT_ROUTES
+-- ============================================================================
+Table: transport_routes
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| route_name      | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_transport_routes_name|                               |
+| monthly_cost    | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 16. TRANSPORT_VEHICLES
+-- ============================================================================
+Table: transport_vehicles
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| vehicle_no      | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_vehicles_no   |                                  |
+| driver_name     | VARCHAR(100)   |                                       |             |                   |                                  |
+| route_id        | INT            |                                       | transport_routes.id| idx_vehicles_route|                               |
+| capacity        | INT            |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 17. EMPLOYEES (Core)
+-- ============================================================================
+Table: employees
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | UNIQUE                                | users.id    | idx_employees_user|                                  |
+| emp_code        | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_employees_code|                                  |
+| dept_id         | INT            | NOT NULL                              | departments.id| idx_employees_dept|                                  |
+| desig_id        | INT            | NOT NULL                              | designations.id| idx_employees_desig|                               |
+| manager_id      | INT            |                                       | employees.id| idx_employees_manager|                               |
+| shift_id        | INT            |                                       | shift_configs.id| idx_employees_shift|                               |
+| cost_center_id  | INT            |                                       | cost_centers.id| idx_employees_cost|                               |
+| branch_id       | INT            |                                       | branches.id  | idx_employees_branch|                               |
+| first_name      | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| last_name       | VARCHAR(100)   |                                       |             |                   |                                  |
+| phone           | VARCHAR(20)    | NOT NULL, UNIQUE                      |             | idx_employees_phone|                                  |
+| join_date       | DATE           | NOT NULL                              |             | idx_employees_joindate|                               |
+| status          | VARCHAR(20)    | NOT NULL DEFAULT 'Active'             |             | idx_employees_status| Active, Probation, Confirmed, etc.|
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 18. EMPLOYEE_PERSONAL_DETAILS (Extended)
+-- ============================================================================
+Table: employee_personal_details
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_emp_personal_emp|                               |
+| date_of_birth   | DATE           |                                       |             |                   |                                  |
+| gender          | VARCHAR(10)    |                                       |             |                   | Male, Female, Other              |
+| marital_status  | VARCHAR(20)    |                                       |             |                   | Single, Married, Divorced, etc.  |
+| nationality     | VARCHAR(50)    |                                       |             |                   |                                  |
+| pan             | VARCHAR(20)    | UNIQUE                                |             | idx_emp_personal_pan|                               |
+| aadhaar         | VARCHAR(20)    | UNIQUE                                |             | idx_emp_personal_aadhaar|                               |
+| passport_no     | VARCHAR(20)    | UNIQUE                                |             |                   |                                  |
+| blood_group     | VARCHAR(5)     |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 19. EMPLOYEE_STATUS_HISTORY (Track changes)
+-- ============================================================================
+Table: employee_status_history
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_emp_status_emp|                                  |
+| status          | VARCHAR(20)    | NOT NULL                              |             |                   |                                  |
+| effective_date  | DATE           | NOT NULL                              |             | idx_emp_status_date|                               |
+| reason          | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 20. EMPLOYEE_CONTRACTS (For contractors)
+-- ============================================================================
+Table: employee_contracts
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_emp_contract_emp|                               |
+| contract_type   | VARCHAR(20)    | NOT NULL                              |             |                   | Permanent, Contract, Intern      |
+| start_date      | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           |                                       |             |                   |                                  |
+| contract_value  | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 21. EMPLOYEE_DEPENDENTS
+-- ============================================================================
+Table: employee_dependents
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_dependents_emp|                                  |
+| name            | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| relation        | VARCHAR(50)    | NOT NULL                              |             |                   | Spouse, Child, Parent            |
+| date_of_birth   | DATE           |                                       |             |                   |                                  |
+| is_nominee      | BOOLEAN        | DEFAULT FALSE                         |             |                   | For insurance/gratuity           |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 22. BANK_DETAILS
+-- ============================================================================
+Table: bank_details
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_bank_emp      |                                  |
+| account_no      | VARCHAR(30)    | NOT NULL, UNIQUE                      |             | idx_bank_account  |                                  |
+| bank_name       | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| ifsc_code       | VARCHAR(20)    | NOT NULL                              |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 23. EMERGENCY_CONTACTS
+-- ============================================================================
+Table: emergency_contacts
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_emergency_emp |                                  |
+| contact_name    | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| relation        | VARCHAR(50)    | NOT NULL                              |             |                   |                                  |
+| phone           | VARCHAR(20)    | NOT NULL                              |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 24. EDUCATION_HISTORY
+-- ============================================================================
+Table: education_history
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_education_emp |                                  |
+| degree_name     | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| institution     | VARCHAR(200)   |                                       |             |                   |                                  |
+| passing_year    | INT            |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 25. WORK_EXPERIENCE
+-- ============================================================================
+Table: work_experience
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_work_emp      |                                  |
+| previous_company| VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| start_date      | DATE           |                                       |             |                   |                                  |
+| end_date        | DATE           |                                       |             |                   |                                  |
+| designation     | VARCHAR(100)   |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 26. EMP_DOCUMENTS
+-- ============================================================================
+Table: emp_documents
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_docs_emp      |                                  |
+| document_type   | VARCHAR(50)    | NOT NULL                              |             |                   | PAN, Passport, Offer Letter, etc.|
+| file_path       | TEXT           | NOT NULL                              |             |                   |                                  |
+| expiry_date     | DATE           |                                       |             | idx_docs_expiry   | For tracking expiration          |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 27. JOB_REQUISITIONS
+-- ============================================================================
+Table: job_requisitions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| title           | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| department_id   | INT            | NOT NULL                              | departments.id| idx_req_dept      |                                  |
+| designation_id  | INT            | NOT NULL                              | designations.id| idx_req_desig     |                                  |
+| location_id     | INT            |                                       | locations.id| idx_req_location  |                                  |
+| hiring_manager_id| INT           | NOT NULL                              | employees.id| idx_req_manager   |                                  |
+| positions       | INT            | NOT NULL                              |             |                   | Number of openings               |
+| status          | VARCHAR(20)    | NOT NULL DEFAULT 'Open'               |             | idx_req_status    | Open, Closed, On Hold            |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 28. CANDIDATES
+-- ============================================================================
+Table: candidates
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| requisition_id  | INT            | NOT NULL                              | job_requisitions.id| idx_cand_req      |                                  |
+| first_name      | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| last_name       | VARCHAR(100)   |                                       |             |                   |                                  |
+| email           | VARCHAR(150)   | NOT NULL                              |             | idx_cand_email    |                                  |
+| phone           | VARCHAR(20)    |                                       |             |                   |                                  |
+| resume_path     | TEXT           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | NOT NULL DEFAULT 'New'                |             | idx_cand_status   | New, Screened, Interviewed, etc. |
+| source          | VARCHAR(50)    |                                       |             |                   | Job portal, Referral, etc.      |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 29. INTERVIEWS
+-- ============================================================================
+Table: interviews
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| candidate_id    | INT            | NOT NULL                              | candidates.id| idx_interview_cand|                                  |
+| interviewer_id  | INT            | NOT NULL                              | employees.id| idx_interview_interviewer|                               |
+| round           | INT            | NOT NULL                              |             |                   | 1,2,3,...                       |
+| scheduled_at    | TIMESTAMP      | NOT NULL                              |             | idx_interview_sched|                               |
+| feedback        | TEXT           |                                       |             |                   |                                  |
+| rating          | INT            |                                       |             |                   | 1-5                              |
+| status          | VARCHAR(20)    | DEFAULT 'Scheduled'                   |             |                   | Scheduled, Completed, Cancelled  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 30. OFFERS
+-- ============================================================================
+Table: offers
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| candidate_id    | INT            | NOT NULL, UNIQUE                      | candidates.id| idx_offer_cand    |                                  |
+| designation_id  | INT            | NOT NULL                              | designations.id| idx_offer_desig   |                                  |
+| offered_salary  | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| joining_date    | DATE           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Draft'                       |             | idx_offer_status  | Draft, Sent, Accepted, Rejected  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 31. ONBOARDING_CHECKLISTS
+-- ============================================================================
+Table: onboarding_checklists
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| department_id   | INT            |                                       | departments.id| idx_checklist_dept|                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 32. ONBOARDING_TASKS
+-- ============================================================================
+Table: onboarding_tasks
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| checklist_id    | INT            | NOT NULL                              | onboarding_checklists.id| idx_task_checklist|                               |
+| task_name       | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| assigned_to_role| VARCHAR(50)    |                                       |             |                   | HR, IT, Admin, etc.              |
+| sequence        | INT            | DEFAULT 0                             |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 33. LEAVE_TYPES
+-- ============================================================================
+Table: leave_types
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_leavetypes_name|                               |
+| code            | VARCHAR(20)    | NOT NULL, UNIQUE                      |             |                   |                                  |
+| annual_limit    | INT            |                                       |             |                   | If applicable                   |
+| is_paid         | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 34. LEAVE_BALANCES
+-- ============================================================================
+Table: leave_balances
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_balance_emp   |                                  |
+| leave_type_id   | INT            | NOT NULL                              | leave_types.id| idx_balance_type  |                                  |
+| year            | INT            | NOT NULL                              |             | idx_balance_year  | e.g., 2026                       |
+| opening_balance | NUMERIC(10,2)  | DEFAULT 0                             |             |                   |                                  |
+| credited        | NUMERIC(10,2)  | DEFAULT 0                             |             |                   | Leaves earned during year        |
+| availed         | NUMERIC(10,2)  | DEFAULT 0                             |             |                   | Leaves taken                     |
+| closing_balance | NUMERIC(10,2)  | DEFAULT 0                             |             |                   | Computed                         |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, leave_type_id, year)         |             |                   |                                  |
+
+-- ============================================================================
+-- 35. LEAVE_REQUESTS
+-- ============================================================================
+Table: leave_requests
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_leaves_emp    |                                  |
+| leave_type_id   | INT            | NOT NULL                              | leave_types.id| idx_leaves_type   |                                  |
+| from_date       | DATE           | NOT NULL                              |             | idx_leaves_dates  |                                  |
+| to_date         | DATE           | NOT NULL                              |             |                   |                                  |
+| days_applied    | NUMERIC(10,2)  | NOT NULL                              |             |                   | Includes half days               |
+| reason          | TEXT           |                                       |             |                   |                                  |
+| attachment      | TEXT           |                                       |             |                   | File path                        |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_leaves_status | Pending, Approved, Rejected, Cancelled |
+| approved_by     | INT            |                                       | employees.id| idx_leaves_approver|                               |
+| approved_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 36. ATTENDANCE
+-- ============================================================================
+Table: attendance
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_att_emp       |                                  |
+| log_date        | DATE           | NOT NULL                              |             | idx_att_date      |                                  |
+| clock_in        | TIMESTAMP      |                                       |             |                   |                                  |
+| clock_out       | TIMESTAMP      |                                       |             |                   |                                  |
+| total_hours     | NUMERIC(10,2)  |                                       |             |                   | Calculated                       |
+| status          | VARCHAR(20)    | DEFAULT 'Present'                     |             | idx_att_status    | Present, Absent, Late, etc.      |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, log_date)                    |             |                   |                                  |
+
+-- ============================================================================
+-- 37. OVERTIME_LOGS
+-- ============================================================================
+Table: overtime_logs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_overtime_emp  |                                  |
+| ot_date         | DATE           | NOT NULL                              |             | idx_overtime_date |                                  |
+| ot_hours        | NUMERIC(10,2)  | NOT NULL                              |             |                   |                                  |
+| approved_by     | INT            |                                       | employees.id| idx_overtime_approver|                               |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_overtime_status|                                 |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, ot_date)                     |             |                   |                                  |
+
+-- ============================================================================
+-- 38. ATTENDANCE_REGULARIZATIONS
+-- ============================================================================
+Table: attendance_regularizations
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_reg_emp       |                                  |
+| attendance_id   | INT            |                                       | attendance.id| idx_reg_att       | If applicable                    |
+| for_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| requested_in    | TIMESTAMP      |                                       |             |                   |                                  |
+| requested_out   | TIMESTAMP      |                                       |             |                   |                                  |
+| reason          | TEXT           | NOT NULL                              |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_reg_status    |                                  |
+| approved_by     | INT            |                                       | employees.id| idx_reg_approver  |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 39. HOLIDAY_CALENDAR_REGIONAL (Regional holidays)
+-- ============================================================================
+Table: holiday_calendar_regional
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| location_id     | INT            | NOT NULL                              | locations.id| idx_reg_holiday_loc|                               |
+| holiday_name    | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| holiday_date    | DATE           | NOT NULL                              |             | idx_reg_holiday_date|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (location_id, holiday_date)           |             |                   |                                  |
+
+-- ============================================================================
+-- 40. SHIFT_ROSTERS
+-- ============================================================================
+Table: shift_rosters
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_roster_emp    |                                  |
+| shift_id        | INT            | NOT NULL                              | shift_configs.id| idx_roster_shift |                               |
+| roster_date     | DATE           | NOT NULL                              |             | idx_roster_date   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, roster_date)                 |             |                   |                                  |
+
+-- ============================================================================
+-- 41. SALARY_GRADES
+-- ============================================================================
+Table: salary_grades
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| grade_name      | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_grade_name    |                                  |
+| min_salary      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| max_salary      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 42. SALARY_STRUCTURES (Per employee)
+-- ============================================================================
+Table: salary_structures
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_struct_emp    |                                  |
+| effective_date  | DATE           | NOT NULL                              |             | idx_struct_date   |                                  |
+| component_name  | VARCHAR(50)    | NOT NULL                              |             |                   | Basic, HRA, DA, etc.             |
+| amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| calculation_type| VARCHAR(20)    |                                       |             |                   | Fixed, Percentage of Basic       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 43. PAYROLL_RUNS
+-- ============================================================================
+Table: payroll_runs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| month_year      | DATE           | NOT NULL                              |             | idx_payroll_month | First day of month               |
+| company_id      | INT            | NOT NULL                              | companies.id| idx_payroll_company|                               |
+| processed_by    | INT            | NOT NULL                              | users.id    | idx_payroll_user  |                                  |
+| processed_at    | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Draft'                       |             | idx_payroll_status| Draft, Processed, Posted         |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (month_year, company_id)              |             |                   |                                  |
+
+-- ============================================================================
+-- 44. SALARY_SLIPS
+-- ============================================================================
+Table: salary_slips
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_slip_emp      |                                  |
+| payroll_run_id  | INT            | NOT NULL                              | payroll_runs.id| idx_slip_run     |                               |
+| gross_salary    | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| total_deductions| NUMERIC(12,2)  | NOT NULL DEFAULT 0                    |             |                   |                                  |
+| net_paid        | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, payroll_run_id)              |             |                   |                                  |
+
+-- ============================================================================
+-- 45. SALARY_COMPONENTS (Breakdown per slip)
+-- ============================================================================
+Table: salary_components
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| slip_id         | INT            | NOT NULL                              | salary_slips.id| idx_comp_slip     |                               |
+| component_name  | VARCHAR(50)    | NOT NULL                              |             |                   | Basic, HRA, PF, etc.             |
+| amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   | Positive for earnings, negative for deductions |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 46. STATUTORY_CONTRIBUTIONS
+-- ============================================================================
+Table: statutory_contributions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_stat_emp      |                                  |
+| month_year      | DATE           | NOT NULL                              |             | idx_stat_month    |                                  |
+| pf_employee     | NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| pf_employer     | NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| esi_employee    | NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| esi_employer    | NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| professional_tax| NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, month_year)                  |             |                   |                                  |
+
+-- ============================================================================
+-- 47. TAX_RECORDS
+-- ============================================================================
+Table: tax_records
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_tax_emp       |                                  |
+| tax_year        | INT            | NOT NULL                              |             | idx_tax_year      |                                  |
+| taxable_income  | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| tax_deducted    | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, tax_year)                    |             |                   |                                  |
+
+-- ============================================================================
+-- 48. TAX_DECLARATIONS (Investments)
+-- ============================================================================
+Table: tax_declarations
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_taxdec_emp    |                                  |
+| tax_year        | INT            | NOT NULL                              |             | idx_taxdec_year   |                                  |
+| section         | VARCHAR(20)    | NOT NULL                              |             |                   | 80C, 80D, HRA, etc.              |
+| amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| proof_path      | TEXT           |                                       |             |                   |                                  |
+| verified_by     | INT            |                                       | employees.id| idx_taxdec_verifier|                               |
+| verified_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 49. BONUS_INCENTIVES
+-- ============================================================================
+Table: bonus_incentives
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_bonus_emp     |                                  |
+| amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| reason          | VARCHAR(200)   |                                       |             |                   |                                  |
+| approved_by     | INT            | NOT NULL                              | employees.id| idx_bonus_approver|                               |
+| paid_in_month   | DATE           |                                       |             | idx_bonus_month   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 50. LOANS
+-- ============================================================================
+Table: loans
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_loans_emp     |                                  |
+| loan_amount     | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| emi_amount      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| tenure_months   | INT            | NOT NULL                              |             |                   |                                  |
+| start_date      | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| outstanding     | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Active'                      |             | idx_loans_status  | Active, Closed                   |
+| approved_by     | INT            | NOT NULL                              | employees.id| idx_loans_approver|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 51. REIMBURSEMENTS
+-- ============================================================================
+Table: reimbursements
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_reimb_emp     |                                  |
+| category        | VARCHAR(50)    | NOT NULL                              |             |                   | Medical, Travel, etc.            |
+| amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| bill_path       | TEXT           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_reimb_status  |                                  |
+| approved_by     | INT            |                                       | employees.id| idx_reimb_approver|                               |
+| paid_in_month   | DATE           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 52. EXPENSE_CLAIMS
+-- ============================================================================
+Table: expense_claims
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_exp_emp       |                                  |
+| amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_exp_status    |                                  |
+| approved_by     | INT            |                                       | employees.id| idx_exp_approver  |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 53. TRAINING_COURSES
+-- ============================================================================
+Table: training_courses
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| course_name     | VARCHAR(200)   | NOT NULL, UNIQUE                      |             | idx_courses_name  |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| duration_hours  | INT            |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 54. COURSE_MODULES
+-- ============================================================================
+Table: course_modules
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| course_id       | INT            | NOT NULL                              | training_courses.id| idx_modules_course|                               |
+| title           | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| content_type    | VARCHAR(20)    |                                       |             |                   | Video, Document, Quiz            |
+| content_url     | TEXT           |                                       |             |                   |                                  |
+| sequence        | INT            | DEFAULT 0                             |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 55. TRAINERS
+-- ============================================================================
+Table: trainers
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            |                                       | employees.id| idx_trainers_emp  | If internal                      |
+| name            | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| email           | VARCHAR(150)   | UNIQUE                                |             | idx_trainers_email|                                  |
+| expertise       | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 56. COURSE_ENROLLMENTS
+-- ============================================================================
+Table: course_enrollments
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_enroll_emp    |                                  |
+| course_id       | INT            | NOT NULL                              | training_courses.id| idx_enroll_course|                               |
+| trainer_id      | INT            |                                       | trainers.id | idx_enroll_trainer|                                  |
+| enrollment_date | DATE           | DEFAULT CURRENT_DATE                  |             |                   |                                  |
+| completion_date | DATE           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Enrolled'                    |             | idx_enroll_status | Enrolled, In Progress, Completed |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, course_id)                   |             |                   |                                  |
+
+-- ============================================================================
+-- 57. ASSIGNMENTS
+-- ============================================================================
+Table: assignments
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| course_id       | INT            | NOT NULL                              | training_courses.id| idx_assign_course|                               |
+| title           | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| deadline        | TIMESTAMP      |                                       |             | idx_assign_deadline|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 58. SUBMISSIONS
+-- ============================================================================
+Table: submissions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_sub_emp       |                                  |
+| assign_id       | INT            | NOT NULL                              | assignments.id| idx_sub_assign    |                                  |
+| submission_url  | TEXT           | NOT NULL                              |             |                   |                                  |
+| submitted_at    | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| grade           | INT            |                                       |             |                   |                                  |
+| feedback        | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, assign_id)                   |             |                   |                                  |
+
+-- ============================================================================
+-- 59. EXAM_SCHEDULES
+-- ============================================================================
+Table: exam_schedules
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| course_id       | INT            | NOT NULL                              | training_courses.id| idx_exam_course   |                               |
+| exam_date       | TIMESTAMP      | NOT NULL                              |             | idx_exam_date     |                                  |
+| duration_minutes| INT            |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 60. EXAM_RESULTS
+-- ============================================================================
+Table: exam_results
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_result_emp    |                                  |
+| exam_id         | INT            | NOT NULL                              | exam_schedules.id| idx_result_exam   |                               |
+| marks_obtained  | INT            |                                       |             |                   |                                  |
+| percentage      | DECIMAL(5,2)   |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Pass'                        |             | idx_result_status | Pass, Fail                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, exam_id)                     |             |                   |                                  |
+
+-- ============================================================================
+-- 61. SKILLS (Master)
+-- ============================================================================
+Table: skills
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| skill_name      | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_skills_name   |                                  |
+| category        | VARCHAR(50)    |                                       |             |                   | Technical, Soft, etc.            |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 62. EMPLOYEE_SKILLS
+-- ============================================================================
+Table: employee_skills
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_emp_skill_emp |                                  |
+| skill_id        | INT            | NOT NULL                              | skills.id   | idx_emp_skill_skill|                               |
+| proficiency     | INT            |                                       |             |                   | 1-5 rating                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, skill_id)                    |             |                   |                                  |
+
+-- ============================================================================
+-- 63. CERTIFICATIONS
+-- ============================================================================
+Table: certifications
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_cert_emp      |                                  |
+| cert_name       | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| issuing_authority| VARCHAR(100)  |                                       |             |                   |                                  |
+| issue_date      | DATE           |                                       |             |                   |                                  |
+| expiry_date     | DATE           |                                       |             | idx_cert_expiry   |                                  |
+| attachment      | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 64. PERFORMANCE_KPIS
+-- ============================================================================
+Table: performance_kpis
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| kpi_name        | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_kpi_name      |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| target_metric   | VARCHAR(50)    |                                       |             |                   | e.g., Sales Target, Bug Fixes    |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 65. PERFORMANCE_GOALS (Per employee per cycle)
+-- ============================================================================
+Table: performance_goals
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_goal_emp      |                                  |
+| kpi_id          | INT            | NOT NULL                              | performance_kpis.id| idx_goal_kpi    |                               |
+| target_value    | VARCHAR(100)   |                                       |             |                   |                                  |
+| achieved_value  | VARCHAR(100)   |                                       |             |                   |                                  |
+| weightage       | INT            |                                       |             |                   | Percentage contribution         |
+| appraisal_cycle_id| INT          |                                       | appraisal_cycles.id| idx_goal_cycle | See appraisal_cycles             |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 66. APPRAISAL_CYCLES
+-- ============================================================================
+Table: appraisal_cycles
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL                              |             | idx_cycle_name    |                                  |
+| start_date      | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Upcoming'                    |             | idx_cycle_status  | Upcoming, Active, Closed         |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 67. APPRAISALS
+-- ============================================================================
+Table: appraisals
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_appraisal_emp |                                  |
+| cycle_id        | INT            | NOT NULL                              | appraisal_cycles.id| idx_appraisal_cycle|                               |
+| reviewer_id     | INT            | NOT NULL                              | employees.id| idx_appraisal_reviewer|                               |
+| overall_score   | DECIMAL(5,2)   |                                       |             |                   |                                  |
+| comments        | TEXT           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Draft'                       |             | idx_appraisal_status| Draft, Submitted, Approved      |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, cycle_id)                    |             |                   |                                  |
+
+-- ============================================================================
+-- 68. MULTI_RATER_FEEDBACK
+-- ============================================================================
+Table: multi_rater_feedback
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| appraisal_id    | INT            | NOT NULL                              | appraisals.id| idx_feedback_appraisal|                               |
+| rater_id        | INT            | NOT NULL                              | employees.id| idx_feedback_rater|                                  |
+| rating          | INT            |                                       |             |                   | 1-5                              |
+| feedback_text   | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 69. PERFORMANCE_IMPROVEMENT_PLANS (PIP)
+-- ============================================================================
+Table: performance_improvement_plans
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_pip_emp       |                                  |
+| start_date      | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| reason          | TEXT           | NOT NULL                              |             |                   |                                  |
+| actions         | TEXT           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Active'                      |             | idx_pip_status    | Active, Completed, Failed        |
+| created_by      | INT            | NOT NULL                              | employees.id| idx_pip_creator   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 70. RESIGNATIONS
+-- ============================================================================
+Table: resignations
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_resign_emp    |                                  |
+| notice_date     | DATE           | NOT NULL                              |             |                   |                                  |
+| last_working_day| DATE           | NOT NULL                              |             | idx_resign_lwd    |                                  |
+| reason          | TEXT           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Submitted'                   |             | idx_resign_status | Submitted, Approved, Revoked     |
+| approved_by     | INT            |                                       | employees.id| idx_resign_approver|                               |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 71. SEPARATION_CLEARANCES
+-- ============================================================================
+Table: separation_clearances
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_clearance_emp |                                  |
+| department      | VARCHAR(50)    | NOT NULL                              |             |                   | IT, Finance, HR, Admin           |
+| cleared_by      | INT            |                                       | employees.id| idx_clearance_by  |                                  |
+| cleared_at      | TIMESTAMP      |                                       |             |                   |                                  |
+| remarks         | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (emp_id, department)                  |             |                   |                                  |
+
+-- ============================================================================
+-- 72. FULL_FINAL_SETTLEMENTS
+-- ============================================================================
+Table: full_final_settlements
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_settle_emp    |                                  |
+| resignation_id  | INT            | NOT NULL                              | resignations.id| idx_settle_resign|                               |
+| total_dues      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| total_recoveries| NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| net_payable     | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| payment_date    | DATE           |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_settle_status | Pending, Paid                    |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 73. ASSETS
+-- ============================================================================
+Table: assets
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| asset_name      | VARCHAR(100)   | NOT NULL                              |             | idx_asset_name    |                                  |
+| serial_no       | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_asset_serial  |                                  |
+| purchase_date   | DATE           |                                       |             |                   |                                  |
+| warranty_expiry | DATE           |                                       |             | idx_asset_warranty|                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Available'                   |             | idx_asset_status  | Available, Assigned, Under Repair, Retired |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 74. ASSET_ASSIGNMENTS
+-- ============================================================================
+Table: asset_assignments
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| asset_id        | INT            | NOT NULL, UNIQUE                      | assets.id   | idx_assign_asset  | One asset assigned at a time     |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_assign_emp    |                                  |
+| assigned_date   | DATE           | NOT NULL                              |             |                   |                                  |
+| returned_date   | DATE           |                                       |             |                   |                                  |
+| condition       | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 75. ASSET_MAINTENANCE
+-- ============================================================================
+Table: asset_maintenance
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| asset_id        | INT            | NOT NULL                              | assets.id   | idx_maint_asset   |                                  |
+| maintenance_date| DATE           | NOT NULL                              |             |                   |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| cost            | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| performed_by    | VARCHAR(100)   |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 76. OFFICE_INVENTORY
+-- ============================================================================
+Table: office_inventory
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| item_name       | VARCHAR(100)   | NOT NULL                              |             | idx_inv_name      |                                  |
+| category        | VARCHAR(50)    |                                       |             |                   | Stationery, Furniture, etc.      |
+| quantity        | INT            | NOT NULL                              |             |                   | Current stock                    |
+| reorder_level   | INT            |                                       |             |                   |                                  |
+| unit_price      | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 77. INVENTORY_CONSUMPTION
+-- ============================================================================
+Table: inventory_consumption
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| inventory_id    | INT            | NOT NULL                              | office_inventory.id| idx_consumption_inv|                               |
+| quantity        | INT            | NOT NULL                              |             |                   |                                  |
+| consumed_by     | INT            |                                       | employees.id| idx_consumption_emp|                               |
+| consumed_date   | DATE           | DEFAULT CURRENT_DATE                  |             |                   |                                  |
+| purpose         | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 78. VENDOR_DETAILS
+-- ============================================================================
+Table: vendor_details
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| vendor_name     | VARCHAR(200)   | NOT NULL, UNIQUE                      |             | idx_vendor_name   |                                  |
+| contact_person  | VARCHAR(100)   |                                       |             |                   |                                  |
+| email           | VARCHAR(150)   |                                       |             | idx_vendor_email  |                                  |
+| phone           | VARCHAR(20)    |                                       |             |                   |                                  |
+| address         | TEXT           |                                       |             |                   |                                  |
+| category        | VARCHAR(50)    |                                       |             |                   | IT, Stationery, etc.             |
+| payment_terms   | VARCHAR(50)    |                                       |             |                   | Net 30, etc.                     |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 79. PROCUREMENT
+-- ============================================================================
+Table: procurement
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| vendor_id       | INT            | NOT NULL                              | vendor_details.id| idx_proc_vendor   |                               |
+| order_date      | DATE           | NOT NULL                              |             |                   |                                  |
+| expected_delivery| DATE          |                                       |             |                   |                                  |
+| total_cost      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Ordered'                     |             | idx_proc_status   | Ordered, Received, Cancelled     |
+| created_by      | INT            | NOT NULL                              | employees.id| idx_proc_creator  |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 80. HELPDESK_TICKETS
+-- ============================================================================
+Table: helpdesk_tickets
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| requester_id    | INT            | NOT NULL                              | employees.id| idx_ticket_requester|                               |
+| category        | VARCHAR(50)    | NOT NULL                              |             |                   | IT, HR, Admin, etc.              |
+| subject         | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| priority        | VARCHAR(20)    | DEFAULT 'Medium'                      |             | idx_ticket_priority|                               |
+| status          | VARCHAR(20)    | DEFAULT 'Open'                        |             | idx_ticket_status | Open, In Progress, Resolved, Closed |
+| assigned_to     | INT            |                                       | employees.id| idx_ticket_assigned|                               |
+| resolution      | TEXT           |                                       |             |                   |                                  |
+| resolved_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 81. NOTIFICATION_TEMPLATES
+-- ============================================================================
+Table: notification_templates
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_template_name |                                  |
+| channel         | VARCHAR(20)    | NOT NULL                              |             |                   | Email, SMS, InApp                |
+| subject         | VARCHAR(200)   |                                       |             |                   | For email                        |
+| body            | TEXT           | NOT NULL                              |             |                   | With placeholders                |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 82. NOTIFICATION_LOGS
+-- ============================================================================
+Table: notification_logs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| template_id     | INT            | NOT NULL                              | notification_templates.id| idx_log_template|                               |
+| recipient       | VARCHAR(200)   | NOT NULL                              |             | idx_log_recipient | Email or phone                   |
+| channel         | VARCHAR(20)    | NOT NULL                              |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_log_status    | Pending, Sent, Failed            |
+| retry_count     | INT            | DEFAULT 0                             |             |                   |                                  |
+| error_message   | TEXT           |                                       |             |                   |                                  |
+| sent_at         | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 83. IN_APP_NOTIFICATIONS
+-- ============================================================================
+Table: in_app_notifications
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | NOT NULL                              | users.id    | idx_inapp_user    |                                  |
+| title           | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
+| message         | TEXT           | NOT NULL                              |             |                   |                                  |
+| link            | TEXT           |                                       |             |                   |                                  |
+| is_read         | BOOLEAN        | DEFAULT FALSE                         |             | idx_inapp_read    |                                  |
+| read_at         | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 84. LOOKUP_VALUES (Dynamic dropdowns)
+-- ============================================================================
+Table: lookup_values
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| lookup_type     | VARCHAR(50)    | NOT NULL                              |             | idx_lookup_type   | e.g., LeaveReason, TicketCategory |
+| value           | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| display_order   | INT            | DEFAULT 0                             |             |                   |                                  |
+| is_active       | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (lookup_type, value)                  |             |                   |                                  |
+
+-- ============================================================================
+-- 85. WORKFLOW_DEFINITIONS (Approval chains)
+-- ============================================================================
+Table: workflow_definitions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| entity_type     | VARCHAR(50)    | NOT NULL                              |             | idx_workflow_entity| e.g., LeaveRequest, ExpenseClaim |
+| step            | INT            | NOT NULL                              |             |                   | Sequence number                  |
+| approver_role   | INT            |                                       | roles.id    | idx_workflow_role | Role that approves               |
+| approver_level  | VARCHAR(50)    |                                       |             |                   | Manager, HR, Finance             |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 86. APPLICATION_SETTINGS (Key‑value config)
+-- ============================================================================
+Table: application_settings
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| setting_key     | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_settings_key  |                                  |
+| setting_value   | TEXT           |                                       |             |                   |                                  |
+| data_type       | VARCHAR(20)    | DEFAULT 'string'                      |             |                   | string, integer, boolean, json   |
+| is_public       | BOOLEAN        | DEFAULT FALSE                         |             |                   | Accessible to frontend?          |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 87. AUDIT_LOGS
+-- ============================================================================
+Table: audit_logs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | NOT NULL                              | users.id    | idx_audit_user    |                                  |
+| action          | VARCHAR(50)    | NOT NULL                              |             |                   | INSERT, UPDATE, DELETE           |
+| table_name      | VARCHAR(100)   | NOT NULL                              |             | idx_audit_table   |                                  |
+| record_id       | INT            |                                       |             | idx_audit_record  |                                  |
+| old_data        | JSONB          |                                       |             |                   |                                  |
+| new_data        | JSONB          |                                       |             |                   |                                  |
+| ip_address      | INET           |                                       |             |                   |                                  |
+| user_agent      | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_audit_created |                                  |
+
+-- ============================================================================
+-- 88. API_LOGS
+-- ============================================================================
+Table: api_logs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            |                                       | users.id    | idx_api_user      |                                  |
+| endpoint        | VARCHAR(200)   | NOT NULL                              |             | idx_api_endpoint  |                                  |
+| method          | VARCHAR(10)    | NOT NULL                              |             |                   |                                  |
+| request_body    | TEXT           |                                       |             |                   |                                  |
+| response_code   | INT            |                                       |             | idx_api_code      |                                  |
+| response_time_ms| INT            |                                       |             |                   |                                  |
+| ip_address      | INET           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_api_created   |                                  |
+
+-- ============================================================================
+-- 89. REFRESH_TOKENS
+-- ============================================================================
+Table: refresh_tokens
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | NOT NULL                              | users.id    | idx_refresh_user  |                                  |
+| token           | TEXT           | NOT NULL, UNIQUE                      |             | idx_refresh_token |                                  |
+| expires_at      | TIMESTAMP      | NOT NULL                              |             | idx_refresh_expiry|                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+================================================================================
+END OF BLUEPRINT (VERSION 1.0.0)
+================================================================================
