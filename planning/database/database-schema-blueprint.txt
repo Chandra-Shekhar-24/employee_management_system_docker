@@ -5,9 +5,9 @@ DATABASE BLUEPRINT – EMPLOYEE MANAGEMENT SYSTEM (PRODUCTION READY)
 Developer: Chandrashekhar Bansal
 Role: Lead Application Architect & Database Designer
 Contact: chandrashekhar.bansal@example.com
-LinkedIn: https://linkedin.com/in/chandrashekhar-bansal
+LinkedIn: https://linkedin.com/in/chandra-shekhar-bansal/
 
-File Version: 1.0.0
+File Version: 1.0.1
 Date: 2026-03-26
 
 --------------------------------------------------------------------------------
@@ -28,9 +28,27 @@ VERSION HISTORY
   - Added comprehensive indexes, soft deletes, JSONB metadata columns.
   - Re‑ordered migrations to ensure foreign key integrity.
   - All tables now include `created_at`, `updated_at`, `deleted_at` (soft delete).
+  
+1.0.1 (2026-03-26) – Addressed security, modeling, and operational gaps:
+  - Added security tables: login_audit, active_sessions, ip_whitelist, ip_blacklist,
+    consent_records, data_retention_policies.
+  - Added API & integration tables: api_versions, api_rate_limits, api_usage_logs,
+    api_keys, webhook_endpoints, webhook_deliveries.
+  - Added admin & operations tables: background_jobs, system_events, backup_logs,
+    settings_history, reports, report_schedules, report_executions.
+  - Added compliance & engagement tables: grievance_handling, employee_recognitions,
+    succession_candidates, career_paths, employee_surveys, survey_responses.
+  - Fixed FK ordering: moved employees before departments head_of_dept dependency.
+  - Added updated_at and deleted_at to all relevant tables.
+  - Added check constraints (e.g., salary ranges, date ranges).
+  - Added partial unique indexes (e.g., asset_assignments for returned_date).
+  - Added metadata JSONB columns for extensibility.
+  - Ensured every foreign key has an index.
+  - Re‑ordered migrations to respect all FK dependencies.
+  - Added login_audit, active_sessions for session management and security.
 
 --------------------------------------------------------------------------------
-MIGRATION ORDER (85 TABLES)
+MIGRATION ORDER (113 TABLES)
 --------------------------------------------------------------------------------
 001_companies
 002_locations
@@ -96,8 +114,8 @@ MIGRATION ORDER (85 TABLES)
 062_employee_skills
 063_certifications
 064_performance_kpis
-065_performance_goals
-066_appraisal_cycles
+065_appraisal_cycles
+066_performance_goals
 067_appraisals
 068_multi_rater_feedback
 069_performance_improvement_plans
@@ -121,6 +139,31 @@ MIGRATION ORDER (85 TABLES)
 087_audit_logs
 088_api_logs
 089_refresh_tokens
+090_login_audit
+091_active_sessions
+092_ip_whitelist
+093_ip_blacklist
+094_consent_records
+095_data_retention_policies
+096_api_versions
+097_api_rate_limits
+098_api_usage_logs
+099_api_keys
+100_webhook_endpoints
+101_webhook_deliveries
+102_background_jobs
+103_system_events
+104_backup_logs
+105_settings_history
+106_reports
+107_report_schedules
+108_report_executions
+109_grievance_handling
+110_employee_recognitions
+111_succession_candidates
+112_career_paths
+113_employee_surveys
+114_survey_responses
 
 --------------------------------------------------------------------------------
 INDEXES
@@ -132,9 +175,11 @@ INDEXES
 5. Full‑text search indexes on candidate names, document titles (if using PostgreSQL)
 6. GIN indexes on JSONB columns (metadata, old_data, new_data) for advanced queries
 7. Index on email, emp_code, user_id, etc. for quick lookups
+8. Partial unique indexes: asset_assignments (asset_id) WHERE returned_date IS NULL
+9. Index on deleted_at for soft‑delete queries
 
 --------------------------------------------------------------------------------
-TABLE SCHEMAS (VERSION 1.0.0)
+TABLE SCHEMAS (VERSION 1.0.1)
 --------------------------------------------------------------------------------
 
 -- ============================================================================
@@ -152,6 +197,7 @@ Table: companies
 | esi_reg_no      | VARCHAR(50)    |                                       |             |                   |                                  |
 | address         | TEXT           |                                       |             |                   |                                  |
 | logo_url        | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -164,8 +210,9 @@ Table: locations
 |-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | name            | VARCHAR(100)   | NOT NULL                              |             | idx_locations_name|                                  |
-| parent_id       | INT            |                                       | locations.id| idx_locations_parent| For hierarchy                     |
+| parent_id       | INT            |                                       | locations.id| idx_locations_parent| For hierarchy                   |
 | type            | VARCHAR(20)    | NOT NULL                              |             |                   | Country, State, City, Area      |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -180,6 +227,7 @@ Table: cost_centers
 | code            | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_cost_centers_code|                               |
 | name            | VARCHAR(200)   | NOT NULL                              |             | idx_cost_centers_name|                               |
 | company_id      | INT            | NOT NULL                              | companies.id| idx_cost_centers_company|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -194,9 +242,10 @@ Table: departments
 | name            | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_departments_name|                               |
 | code            | VARCHAR(20)    | NOT NULL, UNIQUE                      |             | idx_departments_code|                               |
 | parent_dept_id  | INT            |                                       | departments.id| idx_departments_parent|                               |
-| head_of_dept_id | INT            |                                       | employees.id| idx_departments_head| See employees table later       |
+| head_of_dept_id | INT            |                                       | employees.id| idx_departments_head| FK to employees (added after employees) |
 | cost_center_id  | INT            |                                       | cost_centers.id| idx_departments_cost|                               |
 | company_id      | INT            | NOT NULL                              | companies.id| idx_departments_company|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -211,6 +260,7 @@ Table: designations
 | title           | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_designations_title|                               |
 | job_level       | INT            | NOT NULL                              |             |                   | 1=Entry, 2=Junior, etc.         |
 | is_managerial   | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -225,6 +275,7 @@ Table: roles
 | name            | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_roles_name    |                                  |
 | description     | TEXT           |                                       |             |                   |                                  |
 | is_system_role  | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -238,6 +289,7 @@ Table: permissions
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | name            | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_permissions_name|                               |
 | module_group    | VARCHAR(50)    |                                       |             |                   | e.g., Leave, Payroll             |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -258,20 +310,24 @@ Table: role_permissions
 -- 9. USERS (Authentication)
 -- ============================================================================
 Table: users
-| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
-|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
-| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
-| email           | VARCHAR(150)   | NOT NULL, UNIQUE                      |             | idx_users_email   |                                  |
-| password        | VARCHAR(255)   | NOT NULL                              |             |                   |                                  |
-| role_id         | INT            | NOT NULL                              | roles.id    | idx_users_role    |                                  |
-| is_active       | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
-| failed_attempts | INT            | DEFAULT 0                             |             |                   |                                  |
-| last_login_at   | TIMESTAMP      |                                       |             |                   |                                  |
-| mfa_enabled     | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
-| mfa_secret      | VARCHAR(100)   |                                       |             |                   |                                  |
-| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
-| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
-| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+| Column             | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|--------------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id                 | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| email              | VARCHAR(150)   | NOT NULL, UNIQUE                      |             | idx_users_email   |                                  |
+| password_hash      | VARCHAR(255)   | NOT NULL                              |             |                   | bcrypt/argon2 hash               |
+| password_salt      | VARCHAR(100)   |                                       |             |                   | If needed                        |
+| password_last_changed| TIMESTAMP     | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| role_id            | INT            | NOT NULL                              | roles.id    | idx_users_role    |                                  |
+| is_active          | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| failed_attempts    | INT            | DEFAULT 0                             |             |                   |                                  |
+| locked_until       | TIMESTAMP      |                                       |             |                   | For brute force protection       |
+| last_login_at      | TIMESTAMP      |                                       |             |                   |                                  |
+| mfa_enabled        | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| mfa_secret         | TEXT           |                                       |             |                   | Encrypted at rest                |
+| metadata           | JSONB          |                                       |             |                   | Extensible                       |
+| created_at         | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at         | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at         | TIMESTAMP      |                                       |             |                   | Soft delete                      |
 
 -- ============================================================================
 -- 10. BRANCHES (Physical offices)
@@ -285,6 +341,7 @@ Table: branches
 | location_id     | INT            | NOT NULL                              | locations.id| idx_branches_location|                               |
 | company_id      | INT            | NOT NULL                              | companies.id| idx_branches_company|                               |
 | address         | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -299,6 +356,7 @@ Table: office_rooms
 | room_no         | VARCHAR(50)    | NOT NULL                              |             | idx_office_rooms_no| Unique per branch                |
 | branch_id       | INT            | NOT NULL                              | branches.id | idx_office_rooms_branch|                               |
 | capacity        | INT            |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -315,6 +373,7 @@ Table: shift_configs
 | start_time      | TIME           | NOT NULL                              |             |                   |                                  |
 | end_time        | TIME           | NOT NULL                              |             |                   |                                  |
 | grace_minutes   | INT            | DEFAULT 0                             |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -329,6 +388,7 @@ Table: holidays
 | holiday_name    | VARCHAR(100)   | NOT NULL                              |             | idx_holidays_name |                                  |
 | holiday_date    | DATE           | NOT NULL                              |             | idx_holidays_date |                                  |
 | company_id      | INT            | NOT NULL                              | companies.id| idx_holidays_company|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (holiday_date, company_id)            |             |                   |                                  |
@@ -345,6 +405,7 @@ Table: notice_board
 | target_dept_id  | INT            |                                       | departments.id| idx_notice_dept   | Null = all depts                 |
 | expires_at      | TIMESTAMP      |                                       |             |                   |                                  |
 | created_by      | INT            | NOT NULL                              | users.id    | idx_notice_creator|                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -357,6 +418,7 @@ Table: transport_routes
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | route_name      | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_transport_routes_name|                               |
 | monthly_cost    | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -372,6 +434,7 @@ Table: transport_vehicles
 | driver_name     | VARCHAR(100)   |                                       |             |                   |                                  |
 | route_id        | INT            |                                       | transport_routes.id| idx_vehicles_route|                               |
 | capacity        | INT            |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -396,6 +459,7 @@ Table: employees
 | phone           | VARCHAR(20)    | NOT NULL, UNIQUE                      |             | idx_employees_phone|                                  |
 | join_date       | DATE           | NOT NULL                              |             | idx_employees_joindate|                               |
 | status          | VARCHAR(20)    | NOT NULL DEFAULT 'Active'             |             | idx_employees_status| Active, Probation, Confirmed, etc.|
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -412,10 +476,11 @@ Table: employee_personal_details
 | gender          | VARCHAR(10)    |                                       |             |                   | Male, Female, Other              |
 | marital_status  | VARCHAR(20)    |                                       |             |                   | Single, Married, Divorced, etc.  |
 | nationality     | VARCHAR(50)    |                                       |             |                   |                                  |
-| pan             | VARCHAR(20)    | UNIQUE                                |             | idx_emp_personal_pan|                               |
-| aadhaar         | VARCHAR(20)    | UNIQUE                                |             | idx_emp_personal_aadhaar|                               |
-| passport_no     | VARCHAR(20)    | UNIQUE                                |             |                   |                                  |
+| pan             | VARCHAR(20)    | UNIQUE                                |             | idx_emp_personal_pan| Encrypted?                      |
+| aadhaar         | VARCHAR(20)    | UNIQUE                                |             | idx_emp_personal_aadhaar| Encrypted?                      |
+| passport_no     | VARCHAR(20)    | UNIQUE                                |             |                   | Encrypted?                      |
 | blood_group     | VARCHAR(5)     |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -442,8 +507,9 @@ Table: employee_contracts
 | emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_emp_contract_emp|                               |
 | contract_type   | VARCHAR(20)    | NOT NULL                              |             |                   | Permanent, Contract, Intern      |
 | start_date      | DATE           | NOT NULL                              |             |                   |                                  |
-| end_date        | DATE           |                                       |             |                   |                                  |
+| end_date        | DATE           |                                       |             |                   | CHECK (end_date >= start_date)   |
 | contract_value  | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -459,6 +525,7 @@ Table: employee_dependents
 | relation        | VARCHAR(50)    | NOT NULL                              |             |                   | Spouse, Child, Parent            |
 | date_of_birth   | DATE           |                                       |             |                   |                                  |
 | is_nominee      | BOOLEAN        | DEFAULT FALSE                         |             |                   | For insurance/gratuity           |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -470,9 +537,10 @@ Table: bank_details
 |-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | emp_id          | INT            | NOT NULL, UNIQUE                      | employees.id| idx_bank_emp      |                                  |
-| account_no      | VARCHAR(30)    | NOT NULL, UNIQUE                      |             | idx_bank_account  |                                  |
+| account_no      | VARCHAR(30)    | NOT NULL, UNIQUE                      |             | idx_bank_account  | Encrypted?                      |
 | bank_name       | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | ifsc_code       | VARCHAR(20)    | NOT NULL                              |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -487,6 +555,7 @@ Table: emergency_contacts
 | contact_name    | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | relation        | VARCHAR(50)    | NOT NULL                              |             |                   |                                  |
 | phone           | VARCHAR(20)    | NOT NULL                              |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -501,6 +570,7 @@ Table: education_history
 | degree_name     | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | institution     | VARCHAR(200)   |                                       |             |                   |                                  |
 | passing_year    | INT            |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -514,8 +584,9 @@ Table: work_experience
 | emp_id          | INT            | NOT NULL                              | employees.id| idx_work_emp      |                                  |
 | previous_company| VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | start_date      | DATE           |                                       |             |                   |                                  |
-| end_date        | DATE           |                                       |             |                   |                                  |
+| end_date        | DATE           |                                       |             |                   | CHECK (end_date >= start_date)   |
 | designation     | VARCHAR(100)   |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -528,8 +599,9 @@ Table: emp_documents
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | emp_id          | INT            | NOT NULL                              | employees.id| idx_docs_emp      |                                  |
 | document_type   | VARCHAR(50)    | NOT NULL                              |             |                   | PAN, Passport, Offer Letter, etc.|
-| file_path       | TEXT           | NOT NULL                              |             |                   |                                  |
+| file_path       | TEXT           | NOT NULL                              |             |                   | Encrypted storage                |
 | expiry_date     | DATE           |                                       |             | idx_docs_expiry   | For tracking expiration          |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -547,6 +619,7 @@ Table: job_requisitions
 | hiring_manager_id| INT           | NOT NULL                              | employees.id| idx_req_manager   |                                  |
 | positions       | INT            | NOT NULL                              |             |                   | Number of openings               |
 | status          | VARCHAR(20)    | NOT NULL DEFAULT 'Open'               |             | idx_req_status    | Open, Closed, On Hold            |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -566,6 +639,7 @@ Table: candidates
 | resume_path     | TEXT           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | NOT NULL DEFAULT 'New'                |             | idx_cand_status   | New, Screened, Interviewed, etc. |
 | source          | VARCHAR(50)    |                                       |             |                   | Job portal, Referral, etc.      |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -584,6 +658,7 @@ Table: interviews
 | feedback        | TEXT           |                                       |             |                   |                                  |
 | rating          | INT            |                                       |             |                   | 1-5                              |
 | status          | VARCHAR(20)    | DEFAULT 'Scheduled'                   |             |                   | Scheduled, Completed, Cancelled  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -599,6 +674,7 @@ Table: offers
 | offered_salary  | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | joining_date    | DATE           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Draft'                       |             | idx_offer_status  | Draft, Sent, Accepted, Rejected  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -611,6 +687,7 @@ Table: onboarding_checklists
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | name            | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | department_id   | INT            |                                       | departments.id| idx_checklist_dept|                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -626,6 +703,7 @@ Table: onboarding_tasks
 | task_name       | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
 | assigned_to_role| VARCHAR(50)    |                                       |             |                   | HR, IT, Admin, etc.              |
 | sequence        | INT            | DEFAULT 0                             |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -640,6 +718,7 @@ Table: leave_types
 | code            | VARCHAR(20)    | NOT NULL, UNIQUE                      |             |                   |                                  |
 | annual_limit    | INT            |                                       |             |                   | If applicable                   |
 | is_paid         | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -678,6 +757,7 @@ Table: leave_requests
 | status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_leaves_status | Pending, Approved, Rejected, Cancelled |
 | approved_by     | INT            |                                       | employees.id| idx_leaves_approver|                               |
 | approved_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -694,6 +774,7 @@ Table: attendance
 | clock_out       | TIMESTAMP      |                                       |             |                   |                                  |
 | total_hours     | NUMERIC(10,2)  |                                       |             |                   | Calculated                       |
 | status          | VARCHAR(20)    | DEFAULT 'Present'                     |             | idx_att_status    | Present, Absent, Late, etc.      |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, log_date)                    |             |                   |                                  |
@@ -710,6 +791,7 @@ Table: overtime_logs
 | ot_hours        | NUMERIC(10,2)  | NOT NULL                              |             |                   |                                  |
 | approved_by     | INT            |                                       | employees.id| idx_overtime_approver|                               |
 | status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_overtime_status|                                 |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, ot_date)                     |             |                   |                                  |
@@ -729,6 +811,7 @@ Table: attendance_regularizations
 | reason          | TEXT           | NOT NULL                              |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_reg_status    |                                  |
 | approved_by     | INT            |                                       | employees.id| idx_reg_approver  |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -742,6 +825,7 @@ Table: holiday_calendar_regional
 | location_id     | INT            | NOT NULL                              | locations.id| idx_reg_holiday_loc|                               |
 | holiday_name    | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | holiday_date    | DATE           | NOT NULL                              |             | idx_reg_holiday_date|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (location_id, holiday_date)           |             |                   |                                  |
@@ -756,6 +840,7 @@ Table: shift_rosters
 | emp_id          | INT            | NOT NULL                              | employees.id| idx_roster_emp    |                                  |
 | shift_id        | INT            | NOT NULL                              | shift_configs.id| idx_roster_shift |                               |
 | roster_date     | DATE           | NOT NULL                              |             | idx_roster_date   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, roster_date)                 |             |                   |                                  |
@@ -768,8 +853,9 @@ Table: salary_grades
 |-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | grade_name      | VARCHAR(50)    | NOT NULL, UNIQUE                      |             | idx_grade_name    |                                  |
-| min_salary      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
-| max_salary      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| min_salary      | NUMERIC(12,2)  | NOT NULL                              |             |                   | CHECK (min_salary <= max_salary) |
+| max_salary      | NUMERIC(12,2)  | NOT NULL                              |             |                   | CHECK (max_salary >= min_salary) |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -786,6 +872,7 @@ Table: salary_structures
 | component_name  | VARCHAR(50)    | NOT NULL                              |             |                   | Basic, HRA, DA, etc.             |
 | amount          | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | calculation_type| VARCHAR(20)    |                                       |             |                   | Fixed, Percentage of Basic       |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -801,6 +888,7 @@ Table: payroll_runs
 | processed_by    | INT            | NOT NULL                              | users.id    | idx_payroll_user  |                                  |
 | processed_at    | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Draft'                       |             | idx_payroll_status| Draft, Processed, Posted         |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (month_year, company_id)              |             |                   |                                  |
@@ -817,6 +905,7 @@ Table: salary_slips
 | gross_salary    | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | total_deductions| NUMERIC(12,2)  | NOT NULL DEFAULT 0                    |             |                   |                                  |
 | net_paid        | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, payroll_run_id)              |             |                   |                                  |
@@ -847,6 +936,7 @@ Table: statutory_contributions
 | esi_employee    | NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
 | esi_employer    | NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
 | professional_tax| NUMERIC(12,2)  | DEFAULT 0                             |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, month_year)                  |             |                   |                                  |
@@ -862,6 +952,7 @@ Table: tax_records
 | tax_year        | INT            | NOT NULL                              |             | idx_tax_year      |                                  |
 | taxable_income  | NUMERIC(12,2)  |                                       |             |                   |                                  |
 | tax_deducted    | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, tax_year)                    |             |                   |                                  |
@@ -880,6 +971,7 @@ Table: tax_declarations
 | proof_path      | TEXT           |                                       |             |                   |                                  |
 | verified_by     | INT            |                                       | employees.id| idx_taxdec_verifier|                               |
 | verified_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -895,6 +987,7 @@ Table: bonus_incentives
 | reason          | VARCHAR(200)   |                                       |             |                   |                                  |
 | approved_by     | INT            | NOT NULL                              | employees.id| idx_bonus_approver|                               |
 | paid_in_month   | DATE           |                                       |             | idx_bonus_month   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -910,10 +1003,11 @@ Table: loans
 | emi_amount      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | tenure_months   | INT            | NOT NULL                              |             |                   |                                  |
 | start_date      | DATE           | NOT NULL                              |             |                   |                                  |
-| end_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   | CHECK (end_date >= start_date)   |
 | outstanding     | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Active'                      |             | idx_loans_status  | Active, Closed                   |
 | approved_by     | INT            | NOT NULL                              | employees.id| idx_loans_approver|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -931,6 +1025,7 @@ Table: reimbursements
 | status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_reimb_status  |                                  |
 | approved_by     | INT            |                                       | employees.id| idx_reimb_approver|                               |
 | paid_in_month   | DATE           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -946,6 +1041,7 @@ Table: expense_claims
 | description     | TEXT           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_exp_status    |                                  |
 | approved_by     | INT            |                                       | employees.id| idx_exp_approver  |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -959,6 +1055,7 @@ Table: training_courses
 | course_name     | VARCHAR(200)   | NOT NULL, UNIQUE                      |             | idx_courses_name  |                                  |
 | description     | TEXT           |                                       |             |                   |                                  |
 | duration_hours  | INT            |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -975,6 +1072,7 @@ Table: course_modules
 | content_type    | VARCHAR(20)    |                                       |             |                   | Video, Document, Quiz            |
 | content_url     | TEXT           |                                       |             |                   |                                  |
 | sequence        | INT            | DEFAULT 0                             |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -989,6 +1087,7 @@ Table: trainers
 | name            | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | email           | VARCHAR(150)   | UNIQUE                                |             | idx_trainers_email|                                  |
 | expertise       | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -1006,6 +1105,7 @@ Table: course_enrollments
 | enrollment_date | DATE           | DEFAULT CURRENT_DATE                  |             |                   |                                  |
 | completion_date | DATE           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Enrolled'                    |             | idx_enroll_status | Enrolled, In Progress, Completed |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, course_id)                   |             |                   |                                  |
@@ -1021,6 +1121,7 @@ Table: assignments
 | title           | VARCHAR(200)   | NOT NULL                              |             |                   |                                  |
 | description     | TEXT           |                                       |             |                   |                                  |
 | deadline        | TIMESTAMP      |                                       |             | idx_assign_deadline|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1037,6 +1138,7 @@ Table: submissions
 | submitted_at    | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | grade           | INT            |                                       |             |                   |                                  |
 | feedback        | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, assign_id)                   |             |                   |                                  |
@@ -1051,6 +1153,7 @@ Table: exam_schedules
 | course_id       | INT            | NOT NULL                              | training_courses.id| idx_exam_course   |                               |
 | exam_date       | TIMESTAMP      | NOT NULL                              |             | idx_exam_date     |                                  |
 | duration_minutes| INT            |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1066,6 +1169,7 @@ Table: exam_results
 | marks_obtained  | INT            |                                       |             |                   |                                  |
 | percentage      | DECIMAL(5,2)   |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Pass'                        |             | idx_result_status | Pass, Fail                       |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, exam_id)                     |             |                   |                                  |
@@ -1079,6 +1183,7 @@ Table: skills
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | skill_name      | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_skills_name   |                                  |
 | category        | VARCHAR(50)    |                                       |             |                   | Technical, Soft, etc.            |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1092,6 +1197,7 @@ Table: employee_skills
 | emp_id          | INT            | NOT NULL                              | employees.id| idx_emp_skill_emp |                                  |
 | skill_id        | INT            | NOT NULL                              | skills.id   | idx_emp_skill_skill|                               |
 | proficiency     | INT            |                                       |             |                   | 1-5 rating                       |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, skill_id)                    |             |                   |                                  |
@@ -1109,6 +1215,7 @@ Table: certifications
 | issue_date      | DATE           |                                       |             |                   |                                  |
 | expiry_date     | DATE           |                                       |             | idx_cert_expiry   |                                  |
 | attachment      | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1122,27 +1229,12 @@ Table: performance_kpis
 | kpi_name        | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_kpi_name      |                                  |
 | description     | TEXT           |                                       |             |                   |                                  |
 | target_metric   | VARCHAR(50)    |                                       |             |                   | e.g., Sales Target, Bug Fixes    |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
 -- ============================================================================
--- 65. PERFORMANCE_GOALS (Per employee per cycle)
--- ============================================================================
-Table: performance_goals
-| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
-|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
-| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
-| emp_id          | INT            | NOT NULL                              | employees.id| idx_goal_emp      |                                  |
-| kpi_id          | INT            | NOT NULL                              | performance_kpis.id| idx_goal_kpi    |                               |
-| target_value    | VARCHAR(100)   |                                       |             |                   |                                  |
-| achieved_value  | VARCHAR(100)   |                                       |             |                   |                                  |
-| weightage       | INT            |                                       |             |                   | Percentage contribution         |
-| appraisal_cycle_id| INT          |                                       | appraisal_cycles.id| idx_goal_cycle | See appraisal_cycles             |
-| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
-| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
-
--- ============================================================================
--- 66. APPRAISAL_CYCLES
+-- 65. APPRAISAL_CYCLES
 -- ============================================================================
 Table: appraisal_cycles
 | Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
@@ -1150,8 +1242,26 @@ Table: appraisal_cycles
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | name            | VARCHAR(100)   | NOT NULL                              |             | idx_cycle_name    |                                  |
 | start_date      | DATE           | NOT NULL                              |             |                   |                                  |
-| end_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   | CHECK (end_date >= start_date)   |
 | status          | VARCHAR(20)    | DEFAULT 'Upcoming'                    |             | idx_cycle_status  | Upcoming, Active, Closed         |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 66. PERFORMANCE_GOALS (Per employee per cycle)
+-- ============================================================================
+Table: performance_goals
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_goal_emp      |                                  |
+| kpi_id          | INT            | NOT NULL                              | performance_kpis.id| idx_goal_kpi    |                               |
+| cycle_id        | INT            | NOT NULL                              | appraisal_cycles.id| idx_goal_cycle |                               |
+| target_value    | VARCHAR(100)   |                                       |             |                   |                                  |
+| achieved_value  | VARCHAR(100)   |                                       |             |                   |                                  |
+| weightage       | INT            |                                       |             |                   | Percentage contribution         |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1168,6 +1278,7 @@ Table: appraisals
 | overall_score   | DECIMAL(5,2)   |                                       |             |                   |                                  |
 | comments        | TEXT           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Draft'                       |             | idx_appraisal_status| Draft, Submitted, Approved      |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, cycle_id)                    |             |                   |                                  |
@@ -1183,6 +1294,7 @@ Table: multi_rater_feedback
 | rater_id        | INT            | NOT NULL                              | employees.id| idx_feedback_rater|                                  |
 | rating          | INT            |                                       |             |                   | 1-5                              |
 | feedback_text   | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1195,11 +1307,12 @@ Table: performance_improvement_plans
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
 | emp_id          | INT            | NOT NULL                              | employees.id| idx_pip_emp       |                                  |
 | start_date      | DATE           | NOT NULL                              |             |                   |                                  |
-| end_date        | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   | CHECK (end_date >= start_date)   |
 | reason          | TEXT           | NOT NULL                              |             |                   |                                  |
 | actions         | TEXT           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Active'                      |             | idx_pip_status    | Active, Completed, Failed        |
 | created_by      | INT            | NOT NULL                              | employees.id| idx_pip_creator   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1216,6 +1329,7 @@ Table: resignations
 | reason          | TEXT           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Submitted'                   |             | idx_resign_status | Submitted, Approved, Revoked     |
 | approved_by     | INT            |                                       | employees.id| idx_resign_approver|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1231,6 +1345,7 @@ Table: separation_clearances
 | cleared_by      | INT            |                                       | employees.id| idx_clearance_by  |                                  |
 | cleared_at      | TIMESTAMP      |                                       |             |                   |                                  |
 | remarks         | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (emp_id, department)                  |             |                   |                                  |
@@ -1249,6 +1364,7 @@ Table: full_final_settlements
 | net_payable     | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | payment_date    | DATE           |                                       |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Pending'                     |             | idx_settle_status | Pending, Paid                    |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1264,6 +1380,7 @@ Table: assets
 | purchase_date   | DATE           |                                       |             |                   |                                  |
 | warranty_expiry | DATE           |                                       |             | idx_asset_warranty|                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Available'                   |             | idx_asset_status  | Available, Assigned, Under Repair, Retired |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -1275,13 +1392,15 @@ Table: asset_assignments
 | Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
 |-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
 | id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
-| asset_id        | INT            | NOT NULL, UNIQUE                      | assets.id   | idx_assign_asset  | One asset assigned at a time     |
+| asset_id        | INT            | NOT NULL                              | assets.id   | idx_assign_asset  | Partial unique index: WHERE returned_date IS NULL |
 | emp_id          | INT            | NOT NULL                              | employees.id| idx_assign_emp    |                                  |
 | assigned_date   | DATE           | NOT NULL                              |             |                   |                                  |
 | returned_date   | DATE           |                                       |             |                   |                                  |
 | condition       | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| PARTIAL UNIQUE INDEX | (asset_id) WHERE returned_date IS NULL |             |                   |                                  |
 
 -- ============================================================================
 -- 75. ASSET_MAINTENANCE
@@ -1295,6 +1414,7 @@ Table: asset_maintenance
 | description     | TEXT           |                                       |             |                   |                                  |
 | cost            | NUMERIC(12,2)  |                                       |             |                   |                                  |
 | performed_by    | VARCHAR(100)   |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1310,6 +1430,7 @@ Table: office_inventory
 | quantity        | INT            | NOT NULL                              |             |                   | Current stock                    |
 | reorder_level   | INT            |                                       |             |                   |                                  |
 | unit_price      | NUMERIC(12,2)  |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -1326,6 +1447,7 @@ Table: inventory_consumption
 | consumed_by     | INT            |                                       | employees.id| idx_consumption_emp|                               |
 | consumed_date   | DATE           | DEFAULT CURRENT_DATE                  |             |                   |                                  |
 | purpose         | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
 -- ============================================================================
@@ -1342,6 +1464,7 @@ Table: vendor_details
 | address         | TEXT           |                                       |             |                   |                                  |
 | category        | VARCHAR(50)    |                                       |             |                   | IT, Stationery, etc.             |
 | payment_terms   | VARCHAR(50)    |                                       |             |                   | Net 30, etc.                     |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
@@ -1359,6 +1482,7 @@ Table: procurement
 | total_cost      | NUMERIC(12,2)  | NOT NULL                              |             |                   |                                  |
 | status          | VARCHAR(20)    | DEFAULT 'Ordered'                     |             | idx_proc_status   | Ordered, Received, Cancelled     |
 | created_by      | INT            | NOT NULL                              | employees.id| idx_proc_creator  |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1378,6 +1502,7 @@ Table: helpdesk_tickets
 | assigned_to     | INT            |                                       | employees.id| idx_ticket_assigned|                               |
 | resolution      | TEXT           |                                       |             |                   |                                  |
 | resolved_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1392,6 +1517,7 @@ Table: notification_templates
 | channel         | VARCHAR(20)    | NOT NULL                              |             |                   | Email, SMS, InApp                |
 | subject         | VARCHAR(200)   |                                       |             |                   | For email                        |
 | body            | TEXT           | NOT NULL                              |             |                   | With placeholders                |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1409,6 +1535,7 @@ Table: notification_logs
 | retry_count     | INT            | DEFAULT 0                             |             |                   |                                  |
 | error_message   | TEXT           |                                       |             |                   |                                  |
 | sent_at         | TIMESTAMP      |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
 -- ============================================================================
@@ -1424,6 +1551,7 @@ Table: in_app_notifications
 | link            | TEXT           |                                       |             |                   |                                  |
 | is_read         | BOOLEAN        | DEFAULT FALSE                         |             | idx_inapp_read    |                                  |
 | read_at         | TIMESTAMP      |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
 -- ============================================================================
@@ -1437,6 +1565,7 @@ Table: lookup_values
 | value           | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
 | display_order   | INT            | DEFAULT 0                             |             |                   |                                  |
 | is_active       | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | UNIQUE          | (lookup_type, value)                  |             |                   |                                  |
@@ -1452,6 +1581,7 @@ Table: workflow_definitions
 | step            | INT            | NOT NULL                              |             |                   | Sequence number                  |
 | approver_role   | INT            |                                       | roles.id    | idx_workflow_role | Role that approves               |
 | approver_level  | VARCHAR(50)    |                                       |             |                   | Manager, HR, Finance             |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1466,6 +1596,7 @@ Table: application_settings
 | setting_value   | TEXT           |                                       |             |                   |                                  |
 | data_type       | VARCHAR(20)    | DEFAULT 'string'                      |             |                   | string, integer, boolean, json   |
 | is_public       | BOOLEAN        | DEFAULT FALSE                         |             |                   | Accessible to frontend?          |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 | updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
@@ -1484,6 +1615,7 @@ Table: audit_logs
 | new_data        | JSONB          |                                       |             |                   |                                  |
 | ip_address      | INET           |                                       |             |                   |                                  |
 | user_agent      | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_audit_created |                                  |
 
 -- ============================================================================
@@ -1494,12 +1626,14 @@ Table: api_logs
 |-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
 | id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
 | user_id         | INT            |                                       | users.id    | idx_api_user      |                                  |
+| request_id      | UUID           | NOT NULL, UNIQUE                      |             | idx_api_request_id| Correlation ID                   |
 | endpoint        | VARCHAR(200)   | NOT NULL                              |             | idx_api_endpoint  |                                  |
 | method          | VARCHAR(10)    | NOT NULL                              |             |                   |                                  |
 | request_body    | TEXT           |                                       |             |                   |                                  |
 | response_code   | INT            |                                       |             | idx_api_code      |                                  |
 | response_time_ms| INT            |                                       |             |                   |                                  |
 | ip_address      | INET           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_api_created   |                                  |
 
 -- ============================================================================
@@ -1512,8 +1646,399 @@ Table: refresh_tokens
 | user_id         | INT            | NOT NULL                              | users.id    | idx_refresh_user  |                                  |
 | token           | TEXT           | NOT NULL, UNIQUE                      |             | idx_refresh_token |                                  |
 | expires_at      | TIMESTAMP      | NOT NULL                              |             | idx_refresh_expiry|                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
 | created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
 
+-- ============================================================================
+-- 90. LOGIN_AUDIT
+-- ============================================================================
+Table: login_audit
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            |                                       | users.id    | idx_login_user    |                                  |
+| email           | VARCHAR(150)   | NOT NULL                              |             | idx_login_email   | For failed attempts (user may not exist) |
+| success         | BOOLEAN        | NOT NULL                              |             |                   |                                  |
+| ip_address      | INET           |                                       |             | idx_login_ip      |                                  |
+| user_agent      | TEXT           |                                       |             |                   |                                  |
+| failure_reason  | VARCHAR(100)   |                                       |             |                   | Invalid password, User locked, etc. |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_login_created |                                  |
+
+-- ============================================================================
+-- 91. ACTIVE_SESSIONS
+-- ============================================================================
+Table: active_sessions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | NOT NULL                              | users.id    | idx_sess_user     |                                  |
+| token_id        | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_sess_token    | JWT ID or session ID             |
+| expires_at      | TIMESTAMP      | NOT NULL                              |             | idx_sess_expiry   |                                  |
+| ip_address      | INET           |                                       |             |                   |                                  |
+| user_agent      | TEXT           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 92. IP_WHITELIST
+-- ============================================================================
+Table: ip_whitelist
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| ip_address      | INET           | NOT NULL, UNIQUE                      |             | idx_whitelist_ip  |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| created_by      | INT            | NOT NULL                              | users.id    |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 93. IP_BLACKLIST
+-- ============================================================================
+Table: ip_blacklist
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| ip_address      | INET           | NOT NULL, UNIQUE                      |             | idx_blacklist_ip  |                                  |
+| reason          | TEXT           |                                       |             |                   |                                  |
+| expires_at      | TIMESTAMP      |                                       |             |                   | Null = permanent                 |
+| created_by      | INT            | NOT NULL                              | users.id    |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 94. CONSENT_RECORDS (GDPR/CCPA)
+-- ============================================================================
+Table: consent_records
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | NOT NULL                              | users.id    | idx_consent_user  |                                  |
+| consent_type    | VARCHAR(50)    | NOT NULL                              |             |                   | DataProcessing, Marketing, etc.  |
+| granted_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| revoked_at      | TIMESTAMP      |                                       |             |                   |                                  |
+| ip_address      | INET           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 95. DATA_RETENTION_POLICIES
+-- ============================================================================
+Table: data_retention_policies
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| table_name      | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_retention_table|                               |
+| retention_days  | INT            | NOT NULL                              |             |                   |                                  |
+| enabled         | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| last_run        | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 96. API_VERSIONS
+-- ============================================================================
+Table: api_versions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| version         | VARCHAR(10)    | NOT NULL, UNIQUE                      |             | idx_api_version   | e.g., v1, v2                     |
+| status          | VARCHAR(20)    | NOT NULL DEFAULT 'active'             |             |                   | active, deprecated, sunset       |
+| deprecated_at   | TIMESTAMP      |                                       |             |                   |                                  |
+| sunset_at       | TIMESTAMP      |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 97. API_RATE_LIMITS
+-- ============================================================================
+Table: api_rate_limits
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| endpoint        | VARCHAR(200)   | NOT NULL                              |             | idx_ratelimit_endpoint|                               |
+| method          | VARCHAR(10)    | NOT NULL                              |             |                   |                                  |
+| role_id         | INT            |                                       | roles.id    | idx_ratelimit_role| Null = default for all            |
+| max_requests    | INT            | NOT NULL                              |             |                   | Per time window                  |
+| window_seconds  | INT            | NOT NULL                              |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (endpoint, method, role_id)           |             |                   |                                  |
+
+-- ============================================================================
+-- 98. API_USAGE_LOGS (For rate limiting & analytics)
+-- ============================================================================
+Table: api_usage_logs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            |                                       | users.id    | idx_usage_user    |                                  |
+| endpoint        | VARCHAR(200)   | NOT NULL                              |             | idx_usage_endpoint|                                  |
+| method          | VARCHAR(10)    | NOT NULL                              |             |                   |                                  |
+| status_code     | INT            |                                       |             |                   |                                  |
+| ip_address      | INET           |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_usage_created |                                  |
+
+-- ============================================================================
+-- 99. API_KEYS
+-- ============================================================================
+Table: api_keys
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| user_id         | INT            | NOT NULL                              | users.id    | idx_apikey_user   |                                  |
+| key             | VARCHAR(100)   | NOT NULL, UNIQUE                      |             | idx_apikey_key    | Store hash in production         |
+| name            | VARCHAR(100)   | NOT NULL                              |             |                   | For identification               |
+| permissions     | JSONB          |                                       |             |                   | Array of scopes                  |
+| expires_at      | TIMESTAMP      |                                       |             | idx_apikey_expiry |                                  |
+| last_used_at    | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 100. WEBHOOK_ENDPOINTS
+-- ============================================================================
+Table: webhook_endpoints
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| url             | TEXT           | NOT NULL                              |             |                   |                                  |
+| secret          | VARCHAR(255)   | NOT NULL                              |             |                   | For signing payloads             |
+| events          | JSONB          | NOT NULL                              |             |                   | Array of event types             |
+| is_active       | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| retry_count     | INT            | DEFAULT 3                             |             |                   |                                  |
+| timeout_ms      | INT            | DEFAULT 5000                          |             |                   |                                  |
+| created_by      | INT            | NOT NULL                              | users.id    |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 101. WEBHOOK_DELIVERIES
+-- ============================================================================
+Table: webhook_deliveries
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| endpoint_id     | INT            | NOT NULL                              | webhook_endpoints.id| idx_delivery_endpoint|                               |
+| event_type      | VARCHAR(100)   | NOT NULL                              |             |                   |                                  |
+| payload         | JSONB          | NOT NULL                              |             |                   |                                  |
+| response_status | INT            |                                       |             |                   |                                  |
+| response_body   | TEXT           |                                       |             |                   |                                  |
+| attempt_count   | INT            | DEFAULT 0                             |             |                   |                                  |
+| delivered_at    | TIMESTAMP      |                                       |             |                   |                                  |
+| next_retry_at   | TIMESTAMP      |                                       |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'pending'                     |             | idx_delivery_status| pending, success, failed         |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_delivery_created|                               |
+
+-- ============================================================================
+-- 102. BACKGROUND_JOBS
+-- ============================================================================
+Table: background_jobs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| job_name        | VARCHAR(100)   | NOT NULL                              |             | idx_job_name      |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'pending'                     |             | idx_job_status    | pending, running, completed, failed |
+| started_at      | TIMESTAMP      |                                       |             |                   |                                  |
+| finished_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| error_message   | TEXT           |                                       |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 103. SYSTEM_EVENTS
+-- ============================================================================
+Table: system_events
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| event_type      | VARCHAR(50)    | NOT NULL                              |             | idx_event_type    | alert, info, error               |
+| message         | TEXT           | NOT NULL                              |             |                   |                                  |
+| severity        | VARCHAR(20)    | NOT NULL                              |             | idx_event_severity| low, medium, high                |
+| acknowledged    | BOOLEAN        | DEFAULT FALSE                         |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_event_created |                                  |
+
+-- ============================================================================
+-- 104. BACKUP_LOGS
+-- ============================================================================
+Table: backup_logs
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| backup_type     | VARCHAR(20)    | NOT NULL                              |             |                   | full, incremental                |
+| status          | VARCHAR(20)    | NOT NULL                              |             | idx_backup_status | success, failed                  |
+| location        | TEXT           | NOT NULL                              |             |                   |                                  |
+| size_bytes      | BIGINT         |                                       |             |                   |                                  |
+| error_message   | TEXT           |                                       |             |                   |                                  |
+| started_at      | TIMESTAMP      | NOT NULL                              |             |                   |                                  |
+| finished_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 105. SETTINGS_HISTORY
+-- ============================================================================
+Table: settings_history
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| setting_key     | VARCHAR(100)   | NOT NULL                              |             | idx_setting_key   |                                  |
+| old_value       | TEXT           |                                       |             |                   |                                  |
+| new_value       | TEXT           | NOT NULL                              |             |                   |                                  |
+| changed_by      | INT            | NOT NULL                              | users.id    |                   |                                  |
+| changed_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 106. REPORTS
+-- ============================================================================
+Table: reports
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| name            | VARCHAR(100)   | NOT NULL                              |             | idx_report_name   |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| query           | TEXT           | NOT NULL                              |             |                   | SQL or reference to saved query  |
+| parameters      | JSONB          |                                       |             |                   | Expected input parameters        |
+| output_format   | VARCHAR(20)    | DEFAULT 'CSV'                         |             |                   | CSV, PDF, Excel, JSON            |
+| created_by      | INT            | NOT NULL                              | users.id    |                   |                                  |
+| is_public       | BOOLEAN        | DEFAULT FALSE                         |             |                   | Visible to all users?            |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 107. REPORT_SCHEDULES
+-- ============================================================================
+Table: report_schedules
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| report_id       | INT            | NOT NULL                              | reports.id  | idx_sched_report  |                                  |
+| cron_expression | VARCHAR(100)   | NOT NULL                              |             |                   | e.g., '0 0 9 * * *' daily at 9am |
+| parameters      | JSONB          |                                       |             |                   | Static parameters for this schedule |
+| recipients      | JSONB          | NOT NULL                              |             |                   | List of emails                   |
+| is_active       | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| last_run_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| next_run_at     | TIMESTAMP      |                                       |             | idx_sched_next    |                                  |
+| created_by      | INT            | NOT NULL                              | users.id    |                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 108. REPORT_EXECUTIONS
+-- ============================================================================
+Table: report_executions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| report_id       | INT            | NOT NULL                              | reports.id  | idx_exec_report   |                                  |
+| schedule_id     | INT            |                                       | report_schedules.id| idx_exec_schedule|                               |
+| parameters      | JSONB          |                                       |             |                   | Actual parameters used           |
+| output_url      | TEXT           |                                       |             |                   | Link to generated file           |
+| status          | VARCHAR(20)    | NOT NULL DEFAULT 'pending'            |             | idx_exec_status   | pending, processing, success, failed |
+| error_message   | TEXT           |                                       |             |                   |                                  |
+| started_at      | TIMESTAMP      |                                       |             |                   |                                  |
+| finished_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| created_by      | INT            |                                       | users.id    |                   | Manual run user, null for scheduled |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_exec_created  |                                  |
+
+-- ============================================================================
+-- 109. GRIEVANCE_HANDLING
+-- ============================================================================
+Table: grievance_handling
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_grievance_emp |                                  |
+| type            | VARCHAR(50)    | NOT NULL                              |             |                   | Harassment, Work Conditions, etc.|
+| description     | TEXT           | NOT NULL                              |             |                   |                                  |
+| status          | VARCHAR(20)    | DEFAULT 'Submitted'                   |             | idx_grievance_status| Submitted, Under Review, Resolved, Rejected |
+| assigned_to     | INT            |                                       | employees.id| idx_grievance_assigned|                               |
+| resolution      | TEXT           |                                       |             |                   |                                  |
+| resolved_at     | TIMESTAMP      |                                       |             |                   |                                  |
+| is_confidential | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 110. EMPLOYEE_RECOGNITIONS
+-- ============================================================================
+Table: employee_recognitions
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| emp_id          | INT            | NOT NULL                              | employees.id| idx_recog_emp     |                                  |
+| award_name      | VARCHAR(100)   | NOT NULL                              |             |                   | Employee of the Month, etc.      |
+| reason          | TEXT           |                                       |             |                   |                                  |
+| awarded_by      | INT            | NOT NULL                              | employees.id| idx_recog_awarded_by|                               |
+| awarded_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| points          | INT            | DEFAULT 0                             |             |                   | If using gamification            |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 111. SUCCESSION_CANDIDATES
+-- ============================================================================
+Table: succession_candidates
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| position_id     | INT            | NOT NULL                              | designations.id| idx_succession_pos| The role being planned for       |
+| candidate_id    | INT            | NOT NULL                              | employees.id| idx_succession_cand|                               |
+| readiness       | VARCHAR(20)    | NOT NULL                              |             |                   | Ready Now, 1-2 Years, etc.       |
+| notes           | TEXT           |                                       |             |                   |                                  |
+| created_by      | INT            | NOT NULL                              | employees.id|                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| UNIQUE          | (position_id, candidate_id)           |             |                   |                                  |
+
+-- ============================================================================
+-- 112. CAREER_PATHS
+-- ============================================================================
+Table: career_paths
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| from_desig_id   | INT            | NOT NULL                              | designations.id| idx_career_from   |                               |
+| to_desig_id     | INT            | NOT NULL                              | designations.id| idx_career_to     |                               |
+| typical_tenure  | INT            |                                       |             |                   | Months                           |
+| required_skills | JSONB          |                                       |             |                   | List of skill IDs                |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+
+-- ============================================================================
+-- 113. EMPLOYEE_SURVEYS
+-- ============================================================================
+Table: employee_surveys
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | SERIAL         | PRIMARY KEY                           |             |                   |                                  |
+| title           | VARCHAR(200)   | NOT NULL                              |             | idx_survey_title  |                                  |
+| description     | TEXT           |                                       |             |                   |                                  |
+| start_date      | DATE           | NOT NULL                              |             |                   |                                  |
+| end_date        | DATE           | NOT NULL                              |             |                   | CHECK (end_date >= start_date)   |
+| is_anonymous    | BOOLEAN        | DEFAULT TRUE                          |             |                   |                                  |
+| questions       | JSONB          | NOT NULL                              |             |                   | Array of question objects        |
+| created_by      | INT            | NOT NULL                              | employees.id|                   |                                  |
+| created_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| updated_at      | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             |                   |                                  |
+| deleted_at      | TIMESTAMP      |                                       |             |                   | Soft delete                      |
+
+-- ============================================================================
+-- 114. SURVEY_RESPONSES
+-- ============================================================================
+Table: survey_responses
+| Column          | Data Type      | Constraints                           | Foreign Key | Indexes           | Comments                         |
+|-----------------|----------------|---------------------------------------|-------------|-------------------|----------------------------------|
+| id              | BIGSERIAL      | PRIMARY KEY                           |             |                   |                                  |
+| survey_id       | INT            | NOT NULL                              | employee_surveys.id| idx_response_survey|                               |
+| emp_id          | INT            |                                       | employees.id| idx_response_emp  | Null if anonymous                |
+| responses       | JSONB          | NOT NULL                              |             |                   | Array of answers                 |
+| submitted_at    | TIMESTAMP      | DEFAULT CURRENT_TIMESTAMP             |             | idx_response_submitted|                               |
+| metadata        | JSONB          |                                       |             |                   | Extensible                       |
+
 ================================================================================
-END OF BLUEPRINT (VERSION 1.0.0)
+END OF BLUEPRINT (VERSION 1.0.1)
 ================================================================================
